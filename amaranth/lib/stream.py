@@ -94,11 +94,12 @@ class Interface:
             raise TypeError(f"Signature of stream.Interface must be a stream.Signature, not "
                             f"{signature!r}")
         self._signature = signature
-        self.__dict__.update(signature.members.create(path=path, src_loc_at=1 + src_loc_at))
         if signature.always_valid:
             self.valid = Const(1)
         if signature.always_ready:
             self.ready = Const(1)
+        self.__dict__.update(signature.members.create(path=path, src_loc_at=1 + src_loc_at))
+        
 
     @property
     def signature(self):
