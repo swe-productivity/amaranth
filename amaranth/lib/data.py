@@ -9,6 +9,7 @@ except ImportError:
 
 from amaranth._utils import final
 from amaranth.hdl import *
+from amaranth.hdl._ast import AnyValue
 from amaranth import hdl
 
 
@@ -901,6 +902,8 @@ class View(ValueCastable):
             return self.__target == other.__target
         elif isinstance(other, Const) and self.__layout == other._Const__layout:
             return self.__target == other.as_value()
+        elif isinstance(other, AnyValue) and self.__layout.as_shape() == other.shape():
+            return self.__target == other
         else:
             raise TypeError(
                 f"View with layout {self.__layout!r} can only be compared to another view or "
@@ -911,6 +914,8 @@ class View(ValueCastable):
             return self.__target != other.__target
         elif isinstance(other, Const) and self.__layout == other._Const__layout:
             return self.__target != other.as_value()
+        elif isinstance(other, AnyValue) and self.__layout.as_shape() == other.shape():
+            return self.__target != other
         else:
             raise TypeError(
                 f"View with layout {self.__layout!r} can only be compared to another view or "
@@ -1149,6 +1154,8 @@ class Const(ValueCastable):
             return self.as_value() == other._View__target
         elif isinstance(other, Const) and self.__layout == other.__layout:
             return self.__target == other.__target
+        elif isinstance(other, AnyValue) and self.__layout.as_shape() == other.shape():
+            return self.as_value() == other
         else:
             cause = None
             if isinstance(other, (dict, list)):
@@ -1168,6 +1175,8 @@ class Const(ValueCastable):
             return self.as_value() != other._View__target
         elif isinstance(other, Const) and self.__layout == other.__layout:
             return self.__target != other.__target
+        elif isinstance(other, AnyValue) and self.__layout.as_shape() == other.shape():
+            return self.as_value() != other
         else:
             cause = None
             if isinstance(other, (dict, list)):
