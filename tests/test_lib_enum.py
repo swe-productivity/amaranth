@@ -132,6 +132,69 @@ class EnumTestCase(FHDLTestCase):
     def test_functional(self):
         Enum("FOO", ["BAR", "BAZ"])
 
+    def test_functional_with_shape(self):
+        EnumA = Enum("EnumA", ["X", "Y", "Z"], shape=unsigned(4))
+        self.assertIsInstance(EnumA, EnumType)
+        self.assertEqual(Shape.cast(EnumA), unsigned(4))
+        self.assertEqual([(m.name, m.value) for m in EnumA],
+                         [("X", 1), ("Y", 2), ("Z", 3)])
+
+    def test_functional_with_shape_str_names(self):
+        EnumA = Enum("EnumA", "A B C", shape=unsigned(4))
+        self.assertEqual(Shape.cast(EnumA), unsigned(4))
+        self.assertEqual([(m.name, m.value) for m in EnumA],
+                         [("A", 1), ("B", 2), ("C", 3)])
+
+    def test_functional_with_shape_tuple_pairs(self):
+        EnumA = Enum("EnumA", [("X", 10), ("Y", 20)], shape=unsigned(8))
+        self.assertEqual(Shape.cast(EnumA), unsigned(8))
+        self.assertEqual([(m.name, m.value) for m in EnumA],
+                         [("X", 10), ("Y", 20)])
+
+    def test_functional_with_shape_dict(self):
+        EnumA = Enum("EnumA", {"P": 5, "Q": 6}, shape=unsigned(4))
+        self.assertEqual(Shape.cast(EnumA), unsigned(4))
+        self.assertEqual([(m.name, m.value) for m in EnumA],
+                         [("P", 5), ("Q", 6)])
+
+    def test_functional_with_shape_start(self):
+        EnumA = Enum("EnumA", ["A", "B"], shape=unsigned(8), start=10)
+        self.assertEqual([(m.name, m.value) for m in EnumA],
+                         [("A", 10), ("B", 11)])
+
+    def test_functional_with_shape_keyword_names(self):
+        EnumA = Enum("EnumA", names=["A", "B"], shape=unsigned(4))
+        self.assertEqual(Shape.cast(EnumA), unsigned(4))
+        self.assertEqual([(m.name, m.value) for m in EnumA],
+                         [("A", 1), ("B", 2)])
+
+    def test_functional_with_shape_empty(self):
+        EnumA = Enum("EnumA", [], shape=unsigned(4))
+        self.assertIsInstance(EnumA, EnumType)
+        self.assertEqual(Shape.cast(EnumA), unsigned(4))
+        self.assertEqual(list(EnumA), [])
+
+    def test_functional_with_shape_signal(self):
+        EnumA = Enum("EnumA", [("A", 0), ("B", 1)], shape=unsigned(2))
+        a = Signal(EnumA)
+        self.assertIsInstance(a, EnumView)
+        self.assertIs(a.shape(), EnumA)
+
+    def test_functional_with_shape_view_class(self):
+        EnumA = Enum("EnumA", [("A", 0)], shape=unsigned(2), view_class=EnumView)
+        self.assertIs(EnumA._amaranth_view_class_, EnumView)
+
+    def test_functional_with_shape_truncation_warning(self):
+        with self.assertWarnsRegex(SyntaxWarning,
+                r"^Value 256 of enumeration member 'A' will be truncated to "
+                r"the enumeration shape unsigned\(4\)$"):
+            Enum("EnumA", [("A", 256)], shape=unsigned(4))
+
+    def test_functional_shape_without_names_wrong(self):
+        with self.assertRaisesRegex(TypeError,
+                r"'shape' and 'view_class' can only be used with the functional API"):
+            Enum(1, shape=unsigned(4))
+
     def test_int_enum(self):
         class EnumA(IntEnum, shape=signed(4)):
             A = 0

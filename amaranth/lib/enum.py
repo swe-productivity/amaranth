@@ -1,4 +1,6 @@
 import enum as py_enum
+import sys
+import types as py_types
 import warnings
 import operator
 
@@ -127,8 +129,8 @@ class EnumType(ShapeCastable, py_enum.EnumMeta):
             # replacement for `enum.Enum`.
             return Shape._cast_plain_enum(cls)
 
-    def __call__(cls, value, *args, **kwargs):
-        """Cast the value to this enum type.
+    def __call__(cls, value, *args, shape=None, view_class=None, **kwargs):
+        """Cast the value to this enum type, or create a new enum class (functional API).
 
         When given an integer constant, it returns the corresponding enum value, like a standard
         Python enumeration.
@@ -139,6 +141,10 @@ class EnumType(ShapeCastable, py_enum.EnumMeta):
         ``view_class`` (like :class:`IntEnum` or :class:`IntFlag`), a plain
         :class:`Value` is returned.
 
+        When used as a functional API (i.e. ``Enum('Color', ['RED', 'GREEN'])``) the ``shape=``
+        and ``view_class=`` keyword arguments are forwarded to the metaclass to create an enum
+        with an explicit shape, just like the ``class`` syntax.
+
         Returns
         -------
         instance of itself
@@ -147,6 +153,8 @@ class EnumType(ShapeCastable, py_enum.EnumMeta):
             For value-castables, as defined by the ``view_class`` keyword argument.
         :class:`Value`
             For value-castables, when a view class is not specified for this enum.
+        A new enum class
+            When used as the functional API.
         """
         if isinstance(value, (Value, ValueCastable)):
             value = Value.cast(value)
@@ -154,7 +162,73 @@ class EnumType(ShapeCastable, py_enum.EnumMeta):
                 return value
             else:
                 return cls._amaranth_view_class_(cls, value)
-        return super().__call__(value, *args, **kwargs)
+        if shape is None and view_class is None:
+            return super().__call__(value, *args, **kwargs)
+
+        # Functional API with shape and/or view_class. The stdlib's _create_ does not
+        # forward these to __new__, so we handle creation via types.new_class which
+        # properly passes keyword arguments through to EnumType.__new__.
+        if args:
+            names = args[0]
+        elif 'names' in kwargs:
+            names = kwargs.pop('names')
+        else:
+            raise TypeError(
+                "'shape' and 'view_class' can only be used with the functional API"
+            )
+
+        module = kwargs.pop('module', None)
+        qualname = kwargs.pop('qualname', None)
+        type_ = kwargs.pop('type', None)
+        start = kwargs.pop('start', 1)
+        boundary = kwargs.pop('boundary', None)
+
+        bases = (cls,) if type_ is None else (type_, cls)
+
+        if isinstance(names, str):
+            names = names.replace(',', ' ').split()
+        if isinstance(names, (tuple, list)) and names and isinstance(names[0], str):
+            _, first_enum = cls._get_mixins_(value, bases)
+            processed = []
+            last_values = []
+            for count, name in enumerate(names):
+                v = first_enum._generate_next_value_(name, start, count, last_values[:])
+                last_values.append(v)
+                processed.append((name, v))
+            names = processed
+        if names is None:
+            names = ()
+
+        kwds = {}
+        if shape is not None:
+            kwds['shape'] = shape
+        if view_class is not None:
+            kwds['view_class'] = view_class
+        if boundary is not None:
+            kwds['boundary'] = boundary
+
+        if module is None:
+            try:
+                module = sys._getframemodulename(1)
+            except AttributeError:
+                try:
+                    module = sys._getframe(1).f_globals['__name__']
+                except (AttributeError, ValueError, KeyError):
+                    pass
+
+        processed_names = names
+        def exec_body(ns):
+            if module is not None:
+                ns['__module__'] = module
+            if qualname is not None:
+                ns['__qualname__'] = qualname
+            for item in processed_names:
+                if isinstance(item, str):
+                    ns[item] = processed_names[item]
+                else:
+                    ns[item[0]] = item[1]
+
+        return py_types.new_class(value, bases, kwds, exec_body)
 
     def const(cls, init):
         # Same considerations apply as above.
